@@ -1,7 +1,5 @@
-from flask import Flask, render_template, request, send_file
+from flask import Flask, render_template, request, redirect
 import yt_dlp
-import io
-import os
 
 app = Flask(__name__)
 
@@ -12,28 +10,24 @@ def index():
 @app.route('/download')
 def download():
     url = request.args.get('url')
-    file_format = request.args.get('format', 'mp4')
-    
     if not url:
-        return "الرجاء إدخال رابط الفيديو", 400
+        return "الرجاء إدخال الرابط", 400
 
-    # إعدادات yt-dlp المتوافقة مع السيرفرات السحابية
     ydl_opts = {
-        'format': 'best' if file_format == 'mp4' else 'bestaudio',
+        'format': 'best', # اختيار أفضل جودة متاحة
         'quiet': True,
-        'no_warnings': True,
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # استخراج معلومات الفيديو والتحميل في الذاكرة
+            # استخراج معلومات الفيديو فقط (بدون تحميله على سيرفرك)
             info = ydl.extract_info(url, download=False)
-            video_url = info['url']
+            # الحصول على الرابط المباشر من يوتيوب
+            direct_url = info.get('url')
             
-        # بدلاً من التحميل على السيرفر، سنقوم بعمل تحويل (Redirect) للرابط المباشر من يوتيوب
-        return redirect(video_url)
-        
+            # توجيه المتصفح مباشرة لرابط يوتيوب (المستخدم هو من سيقوم بالتحميل)
+            return redirect(direct_url)
+            
     except Exception as e:
         return f"حدث خطأ: {str(e)}", 500
 
