@@ -6,7 +6,6 @@ import subprocess
 
 app = Flask(__name__)
 
-# إعداد مسار FFmpeg إذا كنت تعمل محلياً على الويندوز
 if os.path.exists(r"C:\ffmpeg"):
     os.environ["PATH"] += os.pathsep + r"C:\ffmpeg"
 
@@ -23,38 +22,30 @@ def download():
         return "الرجاء وضع رابط الفيديو أولاً", 400
         
     try:
-        # الحل الأحدث والأقوى: إجبار المكتبة على محاكاة عميل يوتيوب للأندرويد أو الويب بالتوكن الداخلي
-        # هذا يمنع رسالة "This request was detected as a bot" تماماً أونلاين
-        yt = YouTube(
-            url,
-            use_oauth=False,
-            allow_oauth_cache=False
-        )
-        
-        # كود تخطي البوت مدمج تلقائياً في النسخ الحديثة من pytubefix عبر عميل الـ WEB_CREATOR
-        yt.bypass_age_gate() 
+        # الحل الأحدث: إجبار السيرفر على استخدام عميل المتصفح الويب (WEB) وتخطي فحص العمر
+        yt = YouTube(url, client='WEB')
         
         if file_format == 'mp4':
-            # 1. جلب مسار الفيديو بأعلى جودة
+            # جلب مسار الفيديو بأعلى جودة
             video_stream = yt.streams.filter(only_video=True, file_extension='mp4').order_by('resolution').desc().first()
-            # 2. جلب مسار الصوت بأعلى جودة
+            # جلب مسار الصوت بأعلى جودة
             audio_stream = yt.streams.filter(only_audio=True, file_extension='mp4').order_by('abr').desc().first()
             
             if not video_stream or not audio_stream:
-                return "تعذر العثور على مسارات الفيديو أو الصوت عالية الجودة", 404
+                return "تعذر العثور على جودة عالية لهذا الفيديو، يرجى تجربة فيديو آخر", 404
                 
             video_file = video_stream.download(filename='temp_video.mp4')
             audio_file = audio_stream.download(filename='temp_audio.mp4')
             output_file = 'output_high_res.mp4'
             
-            # 3. دمج الصوت والفيديو عبر FFmpeg
+            # الدمج الذكي عبر FFmpeg
             cmd = f'ffmpeg -y -i "{video_file}" -i "{audio_file}" -c:v copy -c:a aac "{output_file}"'
             subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
             with open(output_file, 'rb') as f:
                 file_stream = io.BytesIO(f.read())
             
-            # تنظيف الملفات المؤقتة
+            # تنظيف السيرفر من الملفات المؤقتة
             if os.path.exists(video_file): os.remove(video_file)
             if os.path.exists(audio_file): os.remove(audio_file)
             if os.path.exists(output_file): os.remove(output_file)
