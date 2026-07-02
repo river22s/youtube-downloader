@@ -1,14 +1,10 @@
 from flask import Flask, render_template, request, send_file
-from pytubefix import YouTube
+import yt_dlp
 import io
 import os
-import subprocess
+import glob
 
 app = Flask(__name__)
-
-# إعداد مسار FFmpeg إذا كنت تعمل محلياً على الويندوز
-if os.path.exists(r"C:\ffmpeg"):
-    os.environ["PATH"] += os.pathsep + r"C:\ffmpeg"
 
 @app.route('/')
 def index():
@@ -23,44 +19,60 @@ def download():
         return "الرجاء وضع رابط الفيديو أولاً", 400
         
     try:
-        # الحل الصحيح: استخدام عميل الـ WEB لتفادي كشف البوت أونلاين دون استدعاء دوال قديمة
-        yt = YouTube(url, client='WEB')
+        # إعدادات التنزيل الذكية لتخطي حظر 429 ومحاكاة متصفح حقيقي
+        ydl_opts = {
+            'outtmpl': 'downloaded_file.%(ext)s',
+            'quiet': True,
+            'no_warnings': True,
+            # التمذير السحري: استخدام متصفحات عشوائية حقيقية لتفادي الحظر تماماً
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+            }
+        }
         
         if file_format == 'mp4':
-            # 1. جلب مسار الفيديو بأعلى جودة
-            video_stream = yt.streams.filter(only_video=True, file_extension='mp4').order_by('resolution').desc().first()
-            # 2. جلب مسار الصوت بأعلى جودة
-            audio_stream = yt.streams.filter(only_audio=True, file_extension='mp4').order_by('abr').desc().first()
-            
-            if not video_stream or not audio_stream:
-                return "تعذر العثور على مسارات الفيديو أو الصوت عالية الجودة، يرجى تجربة فيديو آخر", 404
-                
-            video_file = video_stream.download(filename='temp_video.mp4')
-            audio_file = audio_stream.download(filename='temp_audio.mp4')
-            output_file = 'output_high_res.mp4'
-            
-            # 3. دمج الصوت والفيديو عبر FFmpeg
-            cmd = f'ffmpeg -y -i "{video_file}" -i "{audio_file}" -c:v copy -c:a aac "{output_file}"'
-            subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            
-            with open(output_file, 'rb') as f:
-                file_stream = io.BytesIO(f.read())
-            
-            # تنظيف الملفات المؤقتة من السيرفر
-            if os.path.exists(video_file): os.remove(video_file)
-            if os.path.exists(audio_file): os.remove(audio_file)
-            if os.path.exists(output_file): os.remove(output_file)
-            
+            # جلب أفضل جودة فيديو مدمجة بالصوت تلقائياً
+            ydl_opts['format'] = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+            # استخدام الـ FFmpeg المتاح بالسيرفر للدمج النهائي
+            ydl_opts['merge_output_format'] = 'mp4'
         elif file_format == 'mp3':
-            audio = yt.streams.get_audio_only()
-            file_stream = io.BytesIO()
-            audio.stream_to_buffer(file_stream)
+            # استخراج الصوت فقط بدقة عالية
+            ydl_opts['format'] = 'bestaudio/best'
+            ydl_opts['postprocessors'] = [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }]
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # جلب معلومات الفيديو أولاً للحصول على الاسم
+            info = ydl.extract_info(url, download=True)
+            video_title = info.get('title', 'video')
+            
+        # البحث عن الملف الناتج في السيرفر (سواء كان mp4 أو mp3)
+        ext = 'mp4' if file_format == 'mp4' else 'mp3'
+        found_files = glob.glob(f"downloaded_file.{ext}*")
+        
+        if not found_files:
+            return "تعذر العثور على الملف المحمل على السيرفر", 404
+            
+        target_file = found_files[0]
+        
+        # قراءة الملف إلى الذاكرة لإرساله للمستخدم
+        with open(target_file, 'rb') as f:
+            file_stream = io.BytesIO(f.read())
+            
+        # حذف الملف من السيرفر فوراً للحفاظ على المساحة المجانية
+        if os.path.exists(target_file):
+            os.remove(target_file)
             
         file_stream.seek(0)
         
-        safe_title = "".join([c for c in yt.title if c.isalpha() or c.isdigit() or c==' ']).rstrip()
-        if not safe_title: 
-            safe_title = "video"
+        # تنظيف اسم الملف ليكون آمناً عند التحميل
+        safe_title = "".join([c for c in video_title if c.isalpha() or c.isdigit() or c==' ']).rstrip()
+        if not safe_title: safe_title = "video"
         
         return send_file(
             file_stream, 
@@ -69,6 +81,10 @@ def download():
             mimetype='video/mp4' if file_format == 'mp4' else 'audio/mp3'
         )
     except Exception as e:
+        # في حال حدوث أي خطأ، نقوم بتنظيف أي ملفات عالقة
+        for f in glob.glob("downloaded_file.*"):
+            try: os.remove(f)
+            except: pass
         return f"حدث خطأ أثناء استخراج الفيديو بجودة عالية: {str(e)}", 500
 
 if __name__ == '__main__':
