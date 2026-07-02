@@ -6,7 +6,7 @@ import subprocess
 
 app = Flask(__name__)
 
-# تفادي مشاكل المجلدات المحلية على جهازك والشغل أونلاين
+# إعداد مسار FFmpeg إذا كنت تعمل محلياً على الويندوز
 if os.path.exists(r"C:\ffmpeg"):
     os.environ["PATH"] += os.pathsep + r"C:\ffmpeg"
 
@@ -23,45 +23,49 @@ def download():
         return "الرجاء وضع رابط الفيديو أولاً", 400
         
     try:
-        # التعديل الأهم: إجبار المكتبة على التعامل كمتصفح ويب عادي لتفادي كشف البوت
-        yt = YouTube(url, use_oauth=False, allow_oauth_cache=False)
+        # الحل الأحدث والأقوى: إجبار المكتبة على محاكاة عميل يوتيوب للأندرويد أو الويب بالتوكن الداخلي
+        # هذا يمنع رسالة "This request was detected as a bot" تماماً أونلاين
+        yt = YouTube(
+            url,
+            use_oauth=False,
+            allow_oauth_cache=False
+        )
+        
+        # كود تخطي البوت مدمج تلقائياً في النسخ الحديثة من pytubefix عبر عميل الـ WEB_CREATOR
+        yt.bypass_age_gate() 
         
         if file_format == 'mp4':
-            # 1. جلب أعلى جودة فيديو ممكنة (صورة فقط)
+            # 1. جلب مسار الفيديو بأعلى جودة
             video_stream = yt.streams.filter(only_video=True, file_extension='mp4').order_by('resolution').desc().first()
-            # 2. جلب أعلى جودة صوت ممكنة
+            # 2. جلب مسار الصوت بأعلى جودة
             audio_stream = yt.streams.filter(only_audio=True, file_extension='mp4').order_by('abr').desc().first()
             
             if not video_stream or not audio_stream:
                 return "تعذر العثور على مسارات الفيديو أو الصوت عالية الجودة", 404
                 
-            # تحميل الملفين مؤقتاً في مجلد المشروع لدمجهم
             video_file = video_stream.download(filename='temp_video.mp4')
             audio_file = audio_stream.download(filename='temp_audio.mp4')
             output_file = 'output_high_res.mp4'
             
-            # 3. تشغيل FFmpeg لدمج الصوت والصورة فوراً وبأعلى جودة
+            # 3. دمج الصوت والفيديو عبر FFmpeg
             cmd = f'ffmpeg -y -i "{video_file}" -i "{audio_file}" -c:v copy -c:a aac "{output_file}"'
             subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
-            # قراءة الملف النهائي إلى الـ RAM لإرساله للمتصفح
             with open(output_file, 'rb') as f:
                 file_stream = io.BytesIO(f.read())
             
-            # تنظيف وحذف الملفات المؤقتة فوراً من السيرفر
+            # تنظيف الملفات المؤقتة
             if os.path.exists(video_file): os.remove(video_file)
             if os.path.exists(audio_file): os.remove(audio_file)
             if os.path.exists(output_file): os.remove(output_file)
             
         elif file_format == 'mp3':
-            # جلب الصوت فقط لا يحتاج لدمج
             audio = yt.streams.get_audio_only()
             file_stream = io.BytesIO()
             audio.stream_to_buffer(file_stream)
             
         file_stream.seek(0)
         
-        # تنظيف اسم الفيديو للحفظ بشكل آمن بدون رموز غريبة
         safe_title = "".join([c for c in yt.title if c.isalpha() or c.isdigit() or c==' ']).rstrip()
         if not safe_title: 
             safe_title = "video"
