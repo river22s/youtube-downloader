@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect
 import yt_dlp
+import os
 
 app = Flask(__name__)
 
@@ -13,23 +14,21 @@ def download():
     if not url:
         return "الرجاء إدخال الرابط", 400
 
+    # إعدادات yt-dlp لاستخدام الكوكيز وتجنب الحظر
     ydl_opts = {
-        'format': 'best', # اختيار أفضل جودة متاحة
+        'format': 'best',
+        'cookiefile': 'cookies.txt',  # قراءة الملف الذي رفعته
         'quiet': True,
+        'no_warnings': True,
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # استخراج معلومات الفيديو فقط (بدون تحميله على سيرفرك)
             info = ydl.extract_info(url, download=False)
-            # الحصول على الرابط المباشر من يوتيوب
-            direct_url = info.get('url')
-            
-            # توجيه المتصفح مباشرة لرابط يوتيوب (المستخدم هو من سيقوم بالتحميل)
-            return redirect(direct_url)
-            
+            # استخراج الرابط المباشر للملف من يوتيوب
+            return redirect(info['url'])
     except Exception as e:
-        return f"حدث خطأ: {str(e)}", 500
+        return f"حدث خطأ (قد يحتاج ملف الكوكيز لتحديث): {str(e)}", 500
 
 if __name__ == '__main__':
     app.run()
