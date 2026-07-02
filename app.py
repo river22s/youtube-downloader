@@ -1,5 +1,7 @@
-from flask import Flask, render_template, request, redirect, jsonify
-import requests
+from flask import Flask, render_template, request, send_file
+import yt_dlp
+import io
+import os
 
 app = Flask(__name__)
 
@@ -10,34 +12,30 @@ def index():
 @app.route('/download')
 def download():
     url = request.args.get('url')
+    file_format = request.args.get('format', 'mp4')
+    
     if not url:
-        return "الرجاء وضع رابط", 400
-    
-    # تحسين الكود: إضافة User-Agent لجعل الطلب يبدو كمتصفح حقيقي
-    cobalt_url = "https://api.cobalt.tools/api/json"
-    payload = {
-        "url": url,
-        "isAudioOnly": request.args.get('format') == 'mp3',
-        "videoQuality": "1080"
+        return "الرجاء إدخال رابط الفيديو", 400
+
+    # إعدادات yt-dlp المتوافقة مع السيرفرات السحابية
+    ydl_opts = {
+        'format': 'best' if file_format == 'mp4' else 'bestaudio',
+        'quiet': True,
+        'no_warnings': True,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     }
-    headers = {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-    
+
     try:
-        response = requests.post(cobalt_url, json=payload, headers=headers)
-        data = response.json()
-        
-        # لنطبع الخطأ الحقيقي إذا وجد
-        if response.status_code == 200 and "url" in data:
-            return redirect(data["url"])
-        else:
-            return f"خطأ من Cobalt: {data}", response.status_code
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # استخراج معلومات الفيديو والتحميل في الذاكرة
+            info = ydl.extract_info(url, download=False)
+            video_url = info['url']
             
+        # بدلاً من التحميل على السيرفر، سنقوم بعمل تحويل (Redirect) للرابط المباشر من يوتيوب
+        return redirect(video_url)
+        
     except Exception as e:
-        return f"خطأ تقني: {str(e)}", 500
+        return f"حدث خطأ: {str(e)}", 500
 
 if __name__ == '__main__':
     app.run()
