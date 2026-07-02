@@ -1,74 +1,42 @@
 from flask import Flask, render_template, request, send_file
 from pytubefix import YouTube
 import io
-import os
-import subprocess
 
 app = Flask(__name__)
 
-if os.path.exists(r"C:\ffmpeg"):
-    os.environ["PATH"] += os.pathsep + r"C:\ffmpeg"
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+  return render_template('index.html')
+
 
 @app.route('/download')
 def download():
-    url = request.args.get('url')
-    file_format = request.args.get('format', 'mp4')
-    
-    if not url:
-        return "الرجاء وضع رابط الفيديو أولاً", 400
-        
-    try:
-        # الحل الأحدث: إجبار السيرفر على استخدام عميل المتصفح الويب (WEB) وتخطي فحص العمر
-        yt = YouTube(url, client='WEB')
-        
-        if file_format == 'mp4':
-            # جلب مسار الفيديو بأعلى جودة
-            video_stream = yt.streams.filter(only_video=True, file_extension='mp4').order_by('resolution').desc().first()
-            # جلب مسار الصوت بأعلى جودة
-            audio_stream = yt.streams.filter(only_audio=True, file_extension='mp4').order_by('abr').desc().first()
-            
-            if not video_stream or not audio_stream:
-                return "تعذر العثور على جودة عالية لهذا الفيديو، يرجى تجربة فيديو آخر", 404
-                
-            video_file = video_stream.download(filename='temp_video.mp4')
-            audio_file = audio_stream.download(filename='temp_audio.mp4')
-            output_file = 'output_high_res.mp4'
-            
-            # الدمج الذكي عبر FFmpeg
-            cmd = f'ffmpeg -y -i "{video_file}" -i "{audio_file}" -c:v copy -c:a aac "{output_file}"'
-            subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            
-            with open(output_file, 'rb') as f:
-                file_stream = io.BytesIO(f.read())
-            
-            # تنظيف السيرفر من الملفات المؤقتة
-            if os.path.exists(video_file): os.remove(video_file)
-            if os.path.exists(audio_file): os.remove(audio_file)
-            if os.path.exists(output_file): os.remove(output_file)
-            
-        elif file_format == 'mp3':
-            audio = yt.streams.get_audio_only()
-            file_stream = io.BytesIO()
-            audio.stream_to_buffer(file_stream)
-            
-        file_stream.seek(0)
-        
-        safe_title = "".join([c for c in yt.title if c.isalpha() or c.isdigit() or c==' ']).rstrip()
-        if not safe_title: 
-            safe_title = "video"
-        
-        return send_file(
-            file_stream, 
-            as_attachment=True, 
-            download_name=f'{safe_title}.{file_format}',
-            mimetype='video/mp4' if file_format == 'mp4' else 'audio/mp3'
-        )
-    except Exception as e:
-        return f"حدث خطأ أثناء استخراج الفيديو بجودة عالية: {str(e)}", 500
+  # Get the URL of the YouTube video
+  url = request.args.get('url')
+  format = request.args.get('format')
+  
+  yt = YouTube(url)
+  
+  if format == 'mp4':
+    # Download the video
+    video = yt.streams.get_highest_resolution()
+    file_stream = io.BytesIO()
+    video.stream_to_buffer(file_stream)
+    file_stream.seek(0)
+  elif format == 'mp3':
+    mp3_stream = yt.streams.get_audio_only()
+    file_stream = io.BytesIO()
+    mp3_stream.stream_to_buffer(file_stream)
+    file_stream.seek(0)
+
+  # Send the file to the browser
+  return send_file(file_stream, as_attachment=True, download_name=f'{yt.title}.{format}')
+
+
+@app.route('/error')
+def error():
+    return render_template('error.html', message='Please fill in all fields!')
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()
