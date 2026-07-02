@@ -10,34 +10,34 @@ def index():
 @app.route('/download')
 def download():
     url = request.args.get('url')
-    # تحديد نوع الملف بناءً على طلب المستخدم
-    is_audio = request.args.get('format') == 'mp3'
+    if not url:
+        return "الرجاء وضع رابط", 400
     
-    # الطلب الموجه لخدمة Cobalt الاحترافية
+    # تحسين الكود: إضافة User-Agent لجعل الطلب يبدو كمتصفح حقيقي
     cobalt_url = "https://api.cobalt.tools/api/json"
     payload = {
         "url": url,
-        "isAudioOnly": is_audio,
-        "videoQuality": "1080",
-        "filenameStyle": "classic"
+        "isAudioOnly": request.args.get('format') == 'mp3',
+        "videoQuality": "1080"
     }
     headers = {
         "Accept": "application/json",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
     try:
-        response = requests.post(cobalt_url, json=payload, headers=headers).json()
+        response = requests.post(cobalt_url, json=payload, headers=headers)
+        data = response.json()
         
-        # إذا تم التحميل بنجاح، سنحصل على رابط الملف
-        if "url" in response:
-            return redirect(response["url"])
-        elif "status" in response and response["status"] == "error":
-            return f"حدث خطأ من المصدر: {response.get('text', 'غير معروف')}", 400
+        # لنطبع الخطأ الحقيقي إذا وجد
+        if response.status_code == 200 and "url" in data:
+            return redirect(data["url"])
         else:
-            return "تعذر الحصول على رابط التحميل، يرجى التأكد من صحة الرابط", 500
+            return f"خطأ من Cobalt: {data}", response.status_code
+            
     except Exception as e:
-        return f"حدث خطأ أثناء الاتصال بالخدمة: {str(e)}", 500
+        return f"خطأ تقني: {str(e)}", 500
 
 if __name__ == '__main__':
     app.run()
