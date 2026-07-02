@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>محول يوتيوب الاحترافي بجودة Full HD</title>
+</head>
+<body style="text-align: center; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding-top: 80px; background-color: #f4f6f9; color: #333;">
+
+    <div style="max-width: 500px; margin: 0 auto; background: white; padding: 40px 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
+        <h1 style="color: #e50914; margin-bottom: 10px; font-size: 26px;">تحميل من يوتيوب بجودة Full HD</h1>
+        <p style="color: #666; margin-bottom: 25px; font-size: 14px;">يتم دمج الصوت والصورة تلقائياً للحصول على أعلى جودة (1080p / 720p)</p>
+        
+        <form action="/download" method="GET" onsubmit="showLoadingText()">
+            <input type="text" name="url" placeholder="ضع رابط فيديو يوتيوب هنا..." required
+                   style="width: 90%; padding: 15px; font-size: 16px; border: 2px solid #e0e0e0; border-radius: 30px; outline: none; text-align: center; box-sizing: border-box; margin-bottom: 20px;">
+            
+            <div style="margin-bottom: 25px; font-size: 15px;">
+                <label style="font-weight: bold; margin-left: 15px;">صيغة الملف المطلوبة:</label>
+                <input type="radio" id="mp4" name="format" value="mp4" checked>
+                <label for="mp4" style="margin-left: 15px; cursor: pointer;">فيديو (MP4 HD)</label>
+                
+                <input type="radio" id="mp3" name="format" value="mp3">
+                <label for="mp3" style="cursor: pointer;">صوت (MP3)</label>
+            </div>
+            
+            <button type="submit" 
+                    style="padding: 15px 45px; font-size: 16px; background-color: #e50914; color: white; border: none; border-radius: 30px; cursor: pointer; font-weight: bold; width: 90%; box-sizing: border-box; box-shadow: 0 5px 15px rgba(229,9,20,0.3);">
+                ابدأ التحميل الفوري الآن
+            </button>
+        </form>
+
+        <div id="loadingStatus" style="margin-top: 25px; color: #2e7d32; font-weight: 500; display: none; background-color: #e8f5e9; padding: 15px; border-radius: 10px; border: 1px solid #c8e6c9; font-size: 14px;">
+            ⏳ جاري سحب مسارات الفيديو والصوت من اليوتيوب ودمجهما بجودة عالية... قد يستغرق الأمر ثوانٍ قليلة قبل بدء تحميل الملف النهائي تلقائياً، يرجى الانتظار...
+        </div>
+    </div>
+
+    <script>
+    function showLoadingText() {
+        document.getElementById('loadingStatus').style.display = 'block';
+    }
+    </script>
+</body>
+</html>
