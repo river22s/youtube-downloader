@@ -1,3 +1,19 @@
+from flask import Flask, render_template, request, send_file
+from pytubefix import YouTube
+import io
+import os
+import subprocess
+
+app = Flask(__name__)
+
+# تفادي مشاكل المجلدات المحلية على جهازك والشغل أونلاين
+if os.path.exists(r"C:\ffmpeg"):
+    os.environ["PATH"] += os.pathsep + r"C:\ffmpeg"
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
 @app.route('/download')
 def download():
     url = request.args.get('url')
@@ -7,39 +23,45 @@ def download():
         return "الرجاء وضع رابط الفيديو أولاً", 400
         
     try:
-        # التعديل السحري: إجبار المكتبة على استخدام واجهة المتصفح لتفادي كشف البوت
+        # التعديل الأهم: إجبار المكتبة على التعامل كمتصفح ويب عادي لتفادي كشف البوت
         yt = YouTube(url, use_oauth=False, allow_oauth_cache=False)
         
         if file_format == 'mp4':
-            # جلب أعلى جودة فيديو (صورة فقط) مع تحديد العميل كمتصفح ويب
+            # 1. جلب أعلى جودة فيديو ممكنة (صورة فقط)
             video_stream = yt.streams.filter(only_video=True, file_extension='mp4').order_by('resolution').desc().first()
-            # جلب أعلى جودة صوت
+            # 2. جلب أعلى جودة صوت ممكنة
             audio_stream = yt.streams.filter(only_audio=True, file_extension='mp4').order_by('abr').desc().first()
             
             if not video_stream or not audio_stream:
                 return "تعذر العثور على مسارات الفيديو أو الصوت عالية الجودة", 404
                 
+            # تحميل الملفين مؤقتاً في مجلد المشروع لدمجهم
             video_file = video_stream.download(filename='temp_video.mp4')
             audio_file = audio_stream.download(filename='temp_audio.mp4')
             output_file = 'output_high_res.mp4'
             
+            # 3. تشغيل FFmpeg لدمج الصوت والصورة فوراً وبأعلى جودة
             cmd = f'ffmpeg -y -i "{video_file}" -i "{audio_file}" -c:v copy -c:a aac "{output_file}"'
             subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
+            # قراءة الملف النهائي إلى الـ RAM لإرساله للمتصفح
             with open(output_file, 'rb') as f:
                 file_stream = io.BytesIO(f.read())
             
+            # تنظيف وحذف الملفات المؤقتة فوراً من السيرفر
             if os.path.exists(video_file): os.remove(video_file)
             if os.path.exists(audio_file): os.remove(audio_file)
             if os.path.exists(output_file): os.remove(output_file)
             
         elif file_format == 'mp3':
+            # جلب الصوت فقط لا يحتاج لدمج
             audio = yt.streams.get_audio_only()
             file_stream = io.BytesIO()
             audio.stream_to_buffer(file_stream)
             
         file_stream.seek(0)
         
+        # تنظيف اسم الفيديو للحفظ بشكل آمن بدون رموز غريبة
         safe_title = "".join([c for c in yt.title if c.isalpha() or c.isdigit() or c==' ']).rstrip()
         if not safe_title: 
             safe_title = "video"
@@ -52,3 +74,6 @@ def download():
         )
     except Exception as e:
         return f"حدث خطأ أثناء استخراج الفيديو بجودة عالية: {str(e)}", 500
+
+if __name__ == '__main__':
+    app.run(debug=True)
